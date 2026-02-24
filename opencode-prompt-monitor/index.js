@@ -22,6 +22,8 @@ const STATE_FILE = process.env.OPENCODE_STATE_FILE || path.join(getUserHome(), '
 let promptCount = 0;
 let sessionStartTime = Date.now();
 let lastLogSize = 0;
+let promptHistory = []; // 存储 prompt 内容
+let currentModel = ''; // 当前使用的模型
 
 // 读取当前日志文件
 function getLatestLogFile() {
@@ -50,14 +52,22 @@ function parseLogLine(line) {
     };
   }
   
-  // 检测 LLM 调用事件
+  // 检测 LLM 调用事件 - 提取消息内容
   if (line.includes('service=llm') && line.includes('stream')) {
     const modelMatch = line.match(/modelID=([^\s]+)/);
     const providerMatch = line.match(/providerID=([^\s]+)/);
+    const smallMatch = line.match(/small=(\w+)/);
+    
+    // 保存当前模型
+    if (modelMatch) {
+      currentModel = modelMatch[1];
+    }
+    
     return {
       type: 'llm_call',
       model: modelMatch ? modelMatch[1] : 'unknown',
       provider: providerMatch ? providerMatch[1] : 'unknown',
+      isSmall: smallMatch ? smallMatch[1] : 'false',
       timestamp: new Date().toISOString()
     };
   }
@@ -95,6 +105,13 @@ function watchLog() {
           const event = parseLogLine(line);
           if (event && event.type === 'prompt') {
             promptCount++;
+            promptHistory.push({
+              count: promptCount,
+              step: event.step,
+              sessionId: event.sessionId,
+              model: currentModel,
+              timestamp: event.timestamp
+            });
             saveState();
           }
         }
@@ -115,7 +132,8 @@ function saveState() {
     const state = {
       promptCount,
       sessionStartTime,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      promptHistory: promptHistory.slice(-50) // 只保留最近50条
     };
     fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
@@ -131,6 +149,7 @@ function loadState() {
       const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
       promptCount = state.promptCount || 0;
       sessionStartTime = state.sessionStartTime || Date.now();
+      promptHistory = state.promptHistory || [];
     }
   } catch (err) {
     // 忽略
@@ -160,6 +179,21 @@ const tools = {
     parameters: {
       type: "object",
       properties: {}
+    }
+  },
+  
+  // 获取 prompt 历史
+  get_prompt_history: {
+    description: "获取最近的 prompt 历史记录",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description: "返回最近几条记录",
+          default: 10
+        }
+      }
     }
   }
 };
@@ -202,6 +236,15 @@ function handleRequest(req, res) {
                 uptimeSeconds: uptime,
                 promptsPerMinute: uptime > 0 ? (promptCount / (uptime / 60)).toFixed(2) : 0
               }, null, 2)
+            }]
+          }));
+        } else if (name === 'get_prompt_history') {
+          const limit = args.limit || 10;
+          const history = promptHistory.slice(-limit);
+          res.end(JSON.stringify({
+            content: [{
+              type: "text",
+              text: JSON.stringify(history, null, 2)
             }]
           }));
         } else {
