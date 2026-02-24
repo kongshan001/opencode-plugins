@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "opencode-prompt-monitor": {
+      "command": "node",
+      "args": ["/root/.openclaw/opencode-prompt-monitor/index.js"],
+      "env": {
+        "HOME": "/root"
+      }
+    }
+  }
+}
