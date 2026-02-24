@@ -8,9 +8,15 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-const LOG_DIR = process.env.OPENCODE_LOG_DIR || path.join(process.env.HOME || '/root', '.local/share/opencode/log');
-const STATE_FILE = path.join(process.env.HOME || '/root', '.local/state/opencode/prompt-count.json');
+// 使用环境变量或自动检测用户目录
+function getUserHome() {
+  return process.env.HOME || process.env.USERPROFILE || os.homedir();
+}
+
+const LOG_DIR = process.env.OPENCODE_LOG_DIR || path.join(getUserHome(), '.local/share/opencode/log');
+const STATE_FILE = process.env.OPENCODE_STATE_FILE || path.join(getUserHome(), '.local/state/opencode/prompt-count.json');
 
 // 状态管理
 let promptCount = 0;
