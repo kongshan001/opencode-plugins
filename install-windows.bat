@@ -31,7 +31,8 @@ echo [2/5] 克隆/更新插件仓库...
 if exist "%INSTALL_DIR%" (
     echo [*] 仓库已存在，正在更新...
     cd /d "%INSTALL_DIR%"
-    git pull
+    git fetch origin
+    git reset --hard origin/master
 ) else (
     git clone "%REPO_URL%" "%INSTALL_DIR%"
 )
@@ -41,23 +42,15 @@ echo.
 echo [3/5] 配置 MCP (Prompt Monitor)...
 if not exist "%OPENCODE_CONFIG_DIR%" mkdir "%OPENCODE_CONFIG_DIR%"
 
-:: 复制 MCP 配置到 opencode.json（如果还没有 mcp 字段）
+:: 创建 opencode.json（如果不存在）
 set "CONFIG_FILE=%OPENCODE_CONFIG_DIR%\opencode.json"
 if not exist "%CONFIG_FILE%" (
-    echo { > "%CONFIG_FILE%"
-    echo   "$schema": "https://opencode.ai/config.json", >> "%CONFIG_FILE%"
-    echo   "mcp": { >> "%CONFIG_FILE%"
-    echo     "prompt-monitor": { >> "%CONFIG_FILE%"
-    echo       "type": "local", >> "%CONFIG_FILE%"
-    echo       "command": ["node", "%INSTALL_DIR%\opencode-prompt-monitor\index.js"], >> "%CONFIG_FILE%"
-    echo       "enabled": true >> "%CONFIG_FILE%"
-    echo     } >> "%CONFIG_FILE%"
-    echo   } >> "%CONFIG_FILE%"
-    echo } >> "%CONFIG_FILE%"
+    echo {"$schema":"https://opencode.ai/config.json","mcp":{"prompt-monitor":{"type":"local","command":["node","%INSTALL_DIR:\=\\%\opencode-prompt-monitor\index.js"],"enabled":true}}} > "%CONFIG_FILE%"
+    echo [√] MCP 配置完成
 ) else (
-    echo [*] opencode.json 已存在，跳过 MCP 配置
+    echo [*] opencode.json 已存在，如需配置 MCP 请手动添加
+    echo     路径: %CONFIG_FILE%
 )
-echo [√] MCP 配置完成
 
 echo.
 echo [4/5] 配置 Skills...
@@ -67,20 +60,14 @@ if not exist "%SKILLS_DIR%" mkdir "%SKILLS_DIR%"
 for %%r in (coordinator planner developer reviewer qa doc-writer) do (
     if exist "%INSTALL_DIR%\team-roles\%%r\SKILL.md" (
         if not exist "%SKILLS_DIR%\%%r" mkdir "%SKILLS_DIR%\%%r"
-        copy /Y "%INSTALL_DIR%\team-roles\%%r\SKILL.md" "%SKILLS_DIR%\%%r\SKILL.md" >nul
-        echo [√] 已安装: %%r
+        copy /Y "%INSTALL_DIR%\team-roles\%%r\SKILL.md" "%SKILLS_DIR%\%%r\SKILL.md" >nul 2>&1
+        if !errorlevel! equ 0 echo [√] 已安装: %%r
     )
 )
 echo [√] Skills 配置完成
 
 echo.
-echo [5/5] 检查 MCP 服务...
-where node >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [!] Node.js 未安装，请先安装 Node.js
-) else (
-    echo [*] MCP 服务检查完成（请手动启动或重启 OpenCode）
-)
+echo [5/5] 完成...
 
 echo.
 echo ============================================
