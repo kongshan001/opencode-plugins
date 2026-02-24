@@ -17,6 +17,7 @@ NC='\033[0m' # No Color
 REPO_URL="https://github.com/kongshan001/opencode-plugins.git"
 INSTALL_DIR="${HOME}/.opencode-plugins"
 OPENCODE_CONFIG_DIR="${HOME}/.config/opencode"
+SKILLS_DIR="${OPENCODE_CONFIG_DIR}/skills"
 
 # 参数
 SKIP_MCP=false
@@ -62,10 +63,10 @@ if [ "$UNINSTALL" = true ]; then
         echo -e "${GREEN}[√] MCP 服务已停止${NC}"
     fi
     
-    # 删除配置
-    if [ -f "${OPENCODE_CONFIG_DIR}/mcp.json" ]; then
-        rm -f "${OPENCODE_CONFIG_DIR}/mcp.json"
-        echo -e "${GREEN}[√] MCP 配置已删除${NC}"
+    # 删除 skills
+    if [ -d "$SKILLS_DIR" ]; then
+        rm -rf "$SKILLS_DIR"
+        echo -e "${GREEN}[√] Skills 已删除${NC}"
     fi
     
     echo -e "${GREEN}[√] 卸载完成${NC}"
@@ -110,14 +111,24 @@ if [ "$SKIP_MCP" = false ]; then
     mkdir -p "$OPENCODE_CONFIG_DIR"
     
     # 备份
-    if [ -f "${OPENCODE_CONFIG_DIR}/mcp.json" ]; then
-        BACKUP="${OPENCODE_CONFIG_DIR}/mcp.json.backup_$(date +%Y%m%d%H%M%S)"
-        cp "${OPENCODE_CONFIG_DIR}/mcp.json" "$BACKUP"
+    if [ -f "${OPENCODE_CONFIG_DIR}/opencode.json" ]; then
+        BACKUP="${OPENCODE_CONFIG_DIR}/opencode.json.backup_$(date +%Y%m%d%H%M%S)"
+        cp "${OPENCODE_CONFIG_DIR}/opencode.json" "$BACKUP"
         echo -e "${YELLOW}已备份现有配置: $BACKUP${NC}"
     fi
     
-    # 使用 OpenCode 正确的 MCP 配置格式 (mcp 字段)
-    cat > "${OPENCODE_CONFIG_DIR}/opencode.json" << EOF
+    # 使用 jq 或简单方式添加 MCP 配置
+    if [ -f "${OPENCODE_CONFIG_DIR}/opencode.json" ]; then
+        # 简单处理：如果已有配置，追加 MCP
+        echo -e "${YELLOW}[!] opencode.json 已存在，请手动添加 MCP 配置${NC}"
+        echo -e "${YELLOW}添加以下内容到 mcp 字段:${NC}"
+        echo "  \"prompt-monitor\": {"
+        echo "    \"type\": \"local\","
+        echo "    \"command\": [\"node\", \"${INSTALL_DIR}/opencode-prompt-monitor/index.js\"],"
+        echo "    \"enabled\": true"
+        echo "  }"
+    else
+        cat > "${OPENCODE_CONFIG_DIR}/opencode.json" << EOF
 {
   "\$schema": "https://opencode.ai/config.json",
   "mcp": {
@@ -126,36 +137,30 @@ if [ "$SKIP_MCP" = false ]; then
       "command": ["node", "${INSTALL_DIR}/opencode-prompt-monitor/index.js"],
       "enabled": true
     }
-  },
-  "skills": {
-    "paths": ["${INSTALL_DIR}/team-roles"]
   }
 }
 EOF
+    fi
     echo -e "${GREEN}[√] MCP 配置完成${NC}"
 fi
 
-# 配置 Skills
+# 配置 Skills (复制到正确位置)
 if [ "$SKIP_SKILLS" = false ]; then
     echo -e "${YELLOW}[*] 配置 Skills...${NC}"
     
-    mkdir -p "$OPENCODE_CONFIG_DIR"
+    mkdir -p "$SKILLS_DIR"
     
-    if [ ! -f "${OPENCODE_CONFIG_DIR}/opencode.json" ]; then
-        cat > "${OPENCODE_CONFIG_DIR}/opencode.json" << EOF
-{
-  "\$schema": "https://opencode.ai/config.json",
-  "skills": {
-    "paths": ["${INSTALL_DIR}/team-roles"]
-  }
-}
-EOF
-        echo -e "${GREEN}[√] Skills 配置完成${NC}"
-    else
-        echo -e "${YELLOW}[!] opencode.json 已存在，请手动添加 skills 配置${NC}"
-        echo -e "${YELLOW}添加以下内容:${NC}"
-        echo "  \"skills\": { \"paths\": [\"${INSTALL_DIR}/team-roles\"] }"
-    fi
+    # 复制每个角色到 skills 目录
+    for role in coordinator planner developer reviewer qa doc-writer; do
+        if [ -d "${INSTALL_DIR}/team-roles/${role}" ]; then
+            cp "${INSTALL_DIR}/team-roles/${role}/SKILL.md" "${SKILLS_DIR}/${role}/SKILL.md" 2>/dev/null || true
+            echo -e "  ${GREEN}[√] 已安装: ${role}${NC}"
+        fi
+    done
+    
+    echo -e "${GREEN}[√] Skills 配置完成: ${SKILLS_DIR}${NC}"
+    echo ""
+    echo -e "${YELLOW}重启 OpenCode 后使用 /skill 查看可用技能${NC}"
 fi
 
 # 启动 MCP 服务
@@ -184,13 +189,11 @@ echo -e "${GREEN}  部署完成!${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
 echo -e "${CYAN}插件目录: ${INSTALL_DIR}${NC}"
+echo -e "${CYAN}Skills目录: ${SKILLS_DIR}${NC}"
 echo ""
 echo -e "${YELLOW}下一步:${NC}"
 echo "  1. 重启 OpenCode 使配置生效"
-echo "  2. 测试 MCP: curl http://localhost:3847/health"
-echo ""
-echo -e "${CYAN}团队角色 Skills:${NC}"
-echo "  ${INSTALL_DIR}/team-roles/"
+echo "  2. 使用 /skill 查看可用技能"
 echo ""
 echo -e "${YELLOW}使用说明:${NC}"
 echo "  卸载: $0 --uninstall"

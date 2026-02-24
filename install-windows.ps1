@@ -52,11 +52,11 @@ if ($Uninstall) {
         Write-Success "MCP 服务已停止"
     }
     
-    # 删除配置
-    $mcpConfig = "$env:APPDATA\opencode\mcp.json"
-    if (Test-Path $mcpConfig) {
-        Remove-Item $mcpConfig -Force
-        Write-Success "MCP 配置已删除"
+    # 删除 skills
+    $skillsDir = "$env:APPDATA\opencode\skills"
+    if (Test-Path $skillsDir) {
+        Remove-Item $skillsDir -Recurse -Force
+        Write-Success "Skills 已删除"
     }
     
     Write-Success "卸载完成"
@@ -111,57 +111,72 @@ if (-not $SkipMCP) {
         New-Item -ItemType Directory -Path $configDir -Force | Out-Null
     }
     
-    $mcpConfig = "$configDir\mcp.json"
-    
-    # 备份现有配置
-    if (Test-Path $mcpConfig) {
-        $backup = "$mcpConfig.backup_$(Get-Date -Format 'yyyyMMddHHmmss')"
-        Copy-Item $mcpConfig $backup
-        Write-Host "已备份现有配置: $backup" -ForegroundColor $yellow
-    }
-    
-    # 转换路径为 Windows 格式
-    $installPathWin = $InstallDir -replace '\\', '\\\\'
-    
-    $mcpJson = @{
-        "prompt-monitor" = @{
-            type = "local"
-            command = @("node", $InstallDir + "\opencode-prompt-monitor\index.js")
-            enabled = $true
+    # 读取现有配置或创建新的
+    $opencodeConfig = "$configDir\opencode.json"
+    $config = @{}
+    if (Test-Path $opencodeConfig) {
+        $config = Get-Content $opencodeConfig | ConvertFrom-Json -AsHashtable
+    } else {
+        $config = @{
+            '$schema' = 'https://opencode.ai/config.json'
         }
     }
     
-    $mcpJson | ConvertTo-Json -Depth 10 | Set-Content $mcpConfig -Encoding UTF8
-    Write-Success "MCP 配置完成: $mcpConfig"
+    # 添加 MCP 配置
+    if (-not $config.mcp) {
+        $config.mcp = @{}
+    }
+    $config.mcp['prompt-monitor'] = @{
+        type = 'local'
+        command = @('node', $InstallDir + '\opencode-prompt-monitor\index.js')
+        enabled = $true
+    }
+    
+    # 保存配置
+    $config | ConvertTo-Json -Depth 10 | Set-Content $opencodeConfig -Encoding UTF8
+    Write-Success "MCP 配置完成: $opencodeConfig"
 }
 
-# 配置 Skills
+# 配置 Skills (复制到正确位置)
 if (-not $SkipSkills) {
     Write-Step "配置 Skills..."
     
-    $configDir = "$env:APPDATA\opencode"
-    $opencodeConfig = "$configDir\opencode.json"
+    $skillsDir = "$env:APPDATA\opencode\skills"
     
-    # 创建默认配置（如果不存在）
-    if (-not (Test-Path $opencodeConfig)) {
-        @{
-            '$schema' = 'https://opencode.ai/config.json'
-            skills = @{
-                paths = @($InstallDir + '\team-roles')
-            }
-        } | ConvertTo-Json -Depth 10 | Set-Content $opencodeConfig -Encoding UTF8
-        Write-Success "Skills 配置完成: $opencodeConfig"
-    } else {
-        Write-Warn "opencode.json 已存在，请手动添加 skills 配置"
-        Write-Host ""
-        Write-Host "在 opencode.json 中添加:" -ForegroundColor $yellow
-        $skillsJson = @{
-            skills = @{
-                paths = @($InstallDir + '\team-roles')
-            }
-        } | ConvertTo-Json -Depth 10
-        Write-Host $skillsJson -ForegroundColor $yellow
+    # 映射 team-roles 到 skills
+    $roleMapping = @{
+        'coordinator' = 'coordinator'
+        'planner' = 'planner'
+        'developer' = 'developer'
+        'reviewer' = 'reviewer'
+        'qa' = 'qa'
+        'doc-writer' = 'doc-writer'
     }
+    
+    foreach ($role in $roleMapping.Keys) {
+        $sourceDir = Join-Path $InstallDir "team-roles\$role"
+        $targetDir = Join-Path $skillsDir $role
+        
+        if (Test-Path $sourceDir) {
+            # 确保目标目录存在
+            if (-not (Test-Path $targetDir)) {
+                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+            }
+            
+            # 复制 SKILL.md
+            $sourceSkill = Join-Path $sourceDir "SKILL.md"
+            $targetSkill = Join-Path $targetDir "SKILL.md"
+            
+            if (Test-Path $sourceSkill) {
+                Copy-Item $sourceSkill $targetSkill -Force
+                Write-Host "  - 已安装: $role" -ForegroundColor Green
+            }
+        }
+    }
+    
+    Write-Success "Skills 配置完成: $skillsDir"
+    Write-Host ""
+    Write-Host "重启 OpenCode 后使用 /skill 查看可用技能" -ForegroundColor Yellow
 }
 
 # 启动 MCP 服务
@@ -199,15 +214,9 @@ Write-Host "  部署完成!" -ForegroundColor $green
 Write-Host "============================================" -ForegroundColor $green
 Write-Host ""
 Write-Host "插件目录: $InstallDir" -ForegroundColor Cyan
+Write-Host "Skills目录: $env:APPDATA\opencode\skills" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "下一步:" -ForegroundColor Yellow
-Write-Host "  1. 重启 OpenCode 使配置生效" 
-Write-Host "  2. 测试 MCP: curl http://localhost:3847/health"
-Write-Host ""
-Write-Host "团队角色 Skills:" -ForegroundColor Cyan
-Write-Host "  $InstallDir\team-roles\"
-Write-Host ""
-Write-Host "使用说明:" -ForegroundColor Yellow
-Write-Host "  卸载: .\install.ps1 -Uninstall"
-Write-Host "  启动MCP: .\install.ps1 -StartService"
+Write-Host "  1. 重启 OpenCode 使配置生效"
+Write-Host "  2. 使用 /skill 查看可用技能"
 Write-Host ""
