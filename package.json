@@ -1,0 +1,9 @@
+{
+  "name": "opencode-demo",
+  "version": "1.0.0",
+  "description": "OpenCode plugin and MCP server demo",
+  "scripts": {
+    "deploy": "bash deploy.sh",
+    "test-mcp": "node mcp-server/index.js"
+  }
+}
