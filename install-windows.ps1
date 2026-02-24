@@ -124,11 +124,10 @@ if (-not $SkipMCP) {
     $installPathWin = $InstallDir -replace '\\', '\\\\'
     
     $mcpJson = @{
-        mcpServers = @{
-            "prompt-monitor" = @{
-                command = "node"
-                args = @("$InstallDir\opencode-prompt-monitor\index.js")
-            }
+        "prompt-monitor" = @{
+            type = "local"
+            command = @("node", $InstallDir + "\opencode-prompt-monitor\index.js")
+            enabled = $true
         }
     }
     

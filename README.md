@@ -64,20 +64,24 @@ ls -la ~/.opencode-plugins/
 
 #### 接入方式
 
-```bash
-# 方式1：手动配置 MCP
-# 编辑 ~/.config/opencode/mcp.json 添加：
+编辑 `~/.config/opencode/opencode.json` 添加 MCP 配置：
 
+```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "prompt-monitor": {
-      "command": "node",
-      "args": ["/path/to/opencode-plugins/opencode-prompt-monitor/index.js"]
+      "type": "local",
+      "command": ["node", "/path/to/opencode-plugins/opencode-prompt-monitor/index.js"],
+      "enabled": true
     }
   }
 }
+```
 
-# 方式2：直接启动（独立进程）
+或者直接启动（独立进程）：
+
+```bash
 node ~/.opencode-plugins/opencode-prompt-monitor/index.js &
 ```
 

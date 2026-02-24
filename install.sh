@@ -116,13 +116,19 @@ if [ "$SKIP_MCP" = false ]; then
         echo -e "${YELLOW}已备份现有配置: $BACKUP${NC}"
     fi
     
-    cat > "${OPENCODE_CONFIG_DIR}/mcp.json" << EOF
+    # 使用 OpenCode 正确的 MCP 配置格式 (mcp 字段)
+    cat > "${OPENCODE_CONFIG_DIR}/opencode.json" << EOF
 {
-  "mcpServers": {
+  "\$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "prompt-monitor": {
-      "command": "node",
-      "args": ["${INSTALL_DIR}/opencode-prompt-monitor/index.js"]
+      "type": "local",
+      "command": ["node", "${INSTALL_DIR}/opencode-prompt-monitor/index.js"],
+      "enabled": true
     }
+  },
+  "skills": {
+    "paths": ["${INSTALL_DIR}/team-roles"]
   }
 }
 EOF
