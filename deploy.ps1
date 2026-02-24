@@ -21,6 +21,9 @@ if (-not $ScriptDir) {
     $ScriptDir = Get-Location
 }
 
+# 转换为正斜杠路径（JSON 中需要）
+$ScriptDirNormalized = $ScriptDir -replace '\\', '/'
+
 Write-Host "📋 检查依赖..." -ForegroundColor Yellow
 Test-Command "node"
 Test-Command "npm"
@@ -55,19 +58,19 @@ if (Test-Path $ConfigFile) {
     Write-Host "✓ 已备份现有配置" -ForegroundColor Yellow
 }
 
-# 生成配置
+# 生成配置（使用正斜杠路径）
 $ConfigContent = @"
 {
-  "`$schema": "https://opencode.ai/config.json",
+  "\$schema": "https://opencode.ai/config.json",
   "mcp": {
     "demo-mcp": {
       "type": "local",
-      "command": ["node", "$ScriptDir\mcp-server\index.js"],
+      "command": ["node", "$ScriptDirNormalized/mcp-server/index.js"],
       "enabled": true
     }
   },
   "plugin": [
-    "$ScriptDir\plugins\demo-plugin.js"
+    "$ScriptDirNormalized/plugins/demo-plugin.js"
   ]
 }
 "@

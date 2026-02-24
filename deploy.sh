@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# OpenCode Plugins 一键部署脚本
+# OpenCode Plugins 一键部署脚本 (macOS / Linux)
 
 set -e
 
@@ -20,7 +20,7 @@ check_command() {
     fi
 }
 
-# 获取脚本所在目录
+# 获取脚本所在目录（转换为绝对路径）
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 检查依赖
@@ -59,7 +59,7 @@ if [ -f "$CONFIG_FILE" ]; then
     echo -e "${YELLOW}✓ 已备份现有配置${NC}"
 fi
 
-# 生成配置
+# 生成配置（使用正斜杠路径）
 cat > "$CONFIG_FILE" << EOF
 {
   "\$schema": "https://opencode.ai/config.json",
