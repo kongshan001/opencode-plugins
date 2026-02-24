@@ -11,12 +11,12 @@ echo   OpenCode Plugins & Skills 一键部署
 echo ============================================
 echo.
 
-:: 配置变量
+:: 配置变量（使用 ~/.config/opencode/）
 set "REPO_URL=https://github.com/kongshan001/opencode-plugins.git"
 set "INSTALL_DIR=%USERPROFILE%\.opencode-plugins"
-set "OPENCODE_CONFIG_DIR=%APPDATA%\opencode"
-set "SKILLS_DIR=%APPDATA%\opencode\skills"
-set "PLUGINS_DIR=%APPDATA%\opencode\plugins"
+set "OPENCODE_CONFIG_DIR=%USERPROFILE%\.config\opencode"
+set "SKILLS_DIR=%OPENCODE_CONFIG_DIR%\skills"
+set "PLUGINS_DIR=%OPENCODE_CONFIG_DIR%\plugins"
 
 echo [1/6] 检查 OpenCode 是否已安装...
 where opencode >nul 2>&1
@@ -88,10 +88,10 @@ echo ============================================
 echo   部署完成!
 echo ============================================
 echo.
-echo 插件目录: %INSTALL_DIR%
-echo MCP 配置: %CONFIG_FILE%
-echo Skills目录: %SKILLS_DIR%
-echo 插件目录: %PLUGINS_DIR%
+echo 插件仓库: %INSTALL_DIR%
+echo 配置目录: %OPENCODE_CONFIG_DIR%
+echo Skills: %SKILLS_DIR%
+echo Plugins: %PLUGINS_DIR%
 echo.
 echo 下一步:
 echo   1. 重启 OpenCode 使配置生效
