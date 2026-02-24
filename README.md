@@ -4,7 +4,41 @@ OpenCode 自定义 MCP、Skills 和插件集合。
 
 ---
 
-## 📦 快速开始
+## 🚀 一键部署
+
+### Windows (PowerShell)
+
+```powershell
+# 以管理员身份运行 PowerShell
+irm https://raw.githubusercontent.com/kongshan001/opencode-plugins/master/install-windows.ps1 | iex
+```
+
+或下载脚本后运行：
+
+```powershell
+.\install-windows.ps1 -StartService
+```
+
+### Windows (CMD)
+
+```cmd
+install-windows.bat
+```
+
+### Linux / MacOS
+
+```bash
+# 下载并运行
+curl -sL https://raw.githubusercontent.com/kongshan001/opencode-plugins/master/install.sh | bash
+
+# 或下载脚本后运行
+chmod +x install.sh
+./install.sh --start-service
+```
+
+---
+
+## 📦 手动部署
 
 ```bash
 # 克隆仓库
