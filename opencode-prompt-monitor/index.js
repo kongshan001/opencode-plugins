@@ -3,14 +3,16 @@
 /**
  * OpenCode Prompt Monitor MCP Server
  * 实时监控 OpenCode 发送给大模型的 prompt 次数
+ * 
+ * 使用 MCP stdio 协议通信
  */
 
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const readline = require('readline');
 
-// 使用环境变量或自动检测用户目录
+// 配置路径
 function getUserHome() {
   return process.env.HOME || process.env.USERPROFILE || os.homedir();
 }
@@ -21,26 +23,40 @@ const STATE_FILE = process.env.OPENCODE_STATE_FILE || path.join(getUserHome(), '
 // 状态管理
 let promptCount = 0;
 let sessionStartTime = Date.now();
+let promptHistory = [];
+let currentModel = '';
 let lastLogSize = 0;
-let promptHistory = []; // 存储 prompt 内容
-let currentModel = ''; // 当前使用的模型
+
+// MCP 响应
+function sendResponse(id, result) {
+  const response = JSON.stringify({ jsonrpc: '2.0', id, result });
+  process.stdout.write(response + '\n');
+}
+
+function sendError(id, code, message) {
+  const error = JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } });
+  process.stdout.write(error + '\n');
+}
 
 // 读取当前日志文件
 function getLatestLogFile() {
-  const files = fs.readdirSync(LOG_DIR)
-    .filter(f => f.endsWith('.log'))
-    .map(f => ({
-      name: f,
-      time: fs.statSync(path.join(LOG_DIR, f)).mtime.getTime()
-    }))
-    .sort((a, b) => b.time - a.time);
-  
-  return files.length > 0 ? path.join(LOG_DIR, files[0].name) : null;
+  try {
+    const files = fs.readdirSync(LOG_DIR)
+      .filter(f => f.endsWith('.log'))
+      .map(f => ({
+        name: f,
+        time: fs.statSync(path.join(LOG_DIR, f)).mtime.getTime()
+      }))
+      .sort((a, b) => b.time - a.time);
+    
+    return files.length > 0 ? path.join(LOG_DIR, files[0].name) : null;
+  } catch (err) {
+    return null;
+  }
 }
 
-// 解析日志行，检测 prompt 事件
+// 解析日志行
 function parseLogLine(line) {
-  // 检测 session.prompt 事件
   if (line.includes('service=session.prompt') && line.includes('step=')) {
     const stepMatch = line.match(/step=(\d+)/);
     const sessionMatch = line.match(/sessionID=([^\s]+)/);
@@ -52,31 +68,22 @@ function parseLogLine(line) {
     };
   }
   
-  // 检测 LLM 调用事件 - 提取消息内容
   if (line.includes('service=llm') && line.includes('stream')) {
     const modelMatch = line.match(/modelID=([^\s]+)/);
-    const providerMatch = line.match(/providerID=([^\s]+)/);
-    const smallMatch = line.match(/small=(\w+)/);
-    
-    // 保存当前模型
     if (modelMatch) {
       currentModel = modelMatch[1];
     }
-    
     return {
       type: 'llm_call',
-      model: modelMatch ? modelMatch[1] : 'unknown',
-      provider: providerMatch ? providerMatch[1] : 'unknown',
-      isSmall: smallMatch ? smallMatch[1] : 'false',
-      timestamp: new Date().toISOString()
+      model: currentModel
     };
   }
   
   return null;
 }
 
-// 监控日志文件
-function watchLog() {
+// 从日志更新状态
+function updateFromLog() {
   const logFile = getLatestLogFile();
   if (!logFile) return;
   
@@ -84,42 +91,34 @@ function watchLog() {
     const stats = fs.statSync(logFile);
     const currentSize = stats.size;
     
-    // 如果文件变小了（新日志文件），重置位置
     if (currentSize < lastLogSize) {
       lastLogSize = 0;
     }
     
     if (currentSize > lastLogSize) {
-      const stream = fs.createReadStream(logFile, {
-        start: lastLogSize,
-        end: currentSize - 1
-      });
+      const content = fs.readFileSync(logFile, 'utf8');
+      const lines = content.split('\n').slice(lastLogSize > 0 ? 0 : 0);
       
-      let buffer = '';
-      stream.on('data', (chunk) => {
-        buffer += chunk;
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // 保留不完整的行
-        
-        for (const line of lines) {
-          const event = parseLogLine(line);
-          if (event && event.type === 'prompt') {
-            promptCount++;
-            promptHistory.push({
-              count: promptCount,
-              step: event.step,
-              sessionId: event.sessionId,
-              model: currentModel,
-              timestamp: event.timestamp
-            });
-            saveState();
-          }
+      // 只处理新增的内容
+      const newContent = content.slice(lastLogSize);
+      const newLines = newContent.split('\n');
+      
+      for (const line of newLines) {
+        const event = parseLogLine(line);
+        if (event && event.type === 'prompt') {
+          promptCount++;
+          promptHistory.push({
+            count: promptCount,
+            step: event.step,
+            sessionId: event.sessionId,
+            model: currentModel,
+            timestamp: event.timestamp
+          });
         }
-      });
+      }
       
-      stream.on('end', () => {
-        lastLogSize = currentSize;
-      });
+      lastLogSize = currentSize;
+      saveState();
     }
   } catch (err) {
     // 忽略错误
@@ -132,8 +131,7 @@ function saveState() {
     const state = {
       promptCount,
       sessionStartTime,
-      lastUpdated: new Date().toISOString(),
-      promptHistory: promptHistory.slice(-50) // 只保留最近50条
+      promptHistory: promptHistory.slice(-50)
     };
     fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
@@ -156,125 +154,141 @@ function loadState() {
   }
 }
 
-// MCP 工具定义
-const tools = {
-  // 获取当前 prompt 次数
-  get_prompt_count: {
-    description: "获取 OpenCode 当前会话发送给大模型的 prompt 次数",
-    parameters: {
-      type: "object",
+// MCP 工具列表
+const tools = [
+  {
+    name: 'get_prompt_count',
+    description: '获取 OpenCode 当前会话发送给大模型的 prompt 次数',
+    inputSchema: {
+      type: 'object',
       properties: {
         reset: {
-          type: "boolean",
-          description: "是否重置计数",
+          type: 'boolean',
+          description: '是否重置计数',
           default: false
         }
       }
     }
   },
-  
-  // 获取统计信息
-  get_stats: {
-    description: "获取详细的 prompt 统计信息",
-    parameters: {
-      type: "object",
+  {
+    name: 'get_stats',
+    description: '获取详细的 prompt 统计信息（次数、运行时长、每分钟请求数）',
+    inputSchema: {
+      type: 'object',
       properties: {}
     }
   },
-  
-  // 获取 prompt 历史
-  get_prompt_history: {
-    description: "获取最近的 prompt 历史记录",
-    parameters: {
-      type: "object",
+  {
+    name: 'get_history',
+    description: '获取最近的 prompt 历史记录',
+    inputSchema: {
+      type: 'object',
       properties: {
         limit: {
-          type: "number",
-          description: "返回最近几条记录",
+          type: 'number',
+          description: '返回最近几条记录',
           default: 10
         }
       }
     }
   }
-};
+];
 
-// 处理 MCP 请求
-function handleRequest(req, res) {
-  res.setHeader('Content-Type', 'application/json');
-  
-  if (req.method === 'GET' && req.url === '/health') {
-    res.end(JSON.stringify({ status: 'ok', promptCount }));
-    return;
-  }
-  
-  if (req.method === 'POST' && req.url === '/tools') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      try {
-        const { name, arguments: args } = JSON.parse(body);
-        
-        if (name === 'get_prompt_count') {
-          if (args.reset) {
-            promptCount = 0;
-            sessionStartTime = Date.now();
-            saveState();
-          }
-          res.end(JSON.stringify({
-            content: [{
-              type: "text",
-              text: `当前已发送 ${promptCount} 个 prompt`
-            }]
-          }));
-        } else if (name === 'get_stats') {
-          const uptime = Math.floor((Date.now() - sessionStartTime) / 1000);
-          res.end(JSON.stringify({
-            content: [{
-              type: "text",
-              text: JSON.stringify({
-                promptCount,
-                uptimeSeconds: uptime,
-                promptsPerMinute: uptime > 0 ? (promptCount / (uptime / 60)).toFixed(2) : 0
-              }, null, 2)
-            }]
-          }));
-        } else if (name === 'get_prompt_history') {
-          const limit = args.limit || 10;
-          const history = promptHistory.slice(-limit);
-          res.end(JSON.stringify({
-            content: [{
-              type: "text",
-              text: JSON.stringify(history, null, 2)
-            }]
-          }));
-        } else {
-          res.end(JSON.stringify({ error: 'Unknown tool' }));
-        }
-      } catch (err) {
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    });
-    return;
-  }
-  
-  // 列出可用工具
-  if (req.method === 'GET' && req.url === '/tools') {
-    res.end(JSON.stringify({ tools: Object.keys(tools) }));
-    return;
-  }
-  
-  res.end(JSON.stringify({ error: 'Not found' }));
-}
+// 主循环
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  terminal: false
+});
 
-// 启动服务器
-const PORT = process.env.PORT || 3847;
-
+// 加载保存的状态
 loadState();
 
-// 启动日志监控
-setInterval(watchLog, 1000);
-
-const server = http.createServer(handleRequest);
-server.listen(PORT, () => {
-  console.log(`OpenCode Prompt Monitor MCP running on port ${PORT}`);
+rl.on('line', (line) => {
+  try {
+    const request = JSON.parse(line);
+    const { id, method, params } = request;
+    
+    switch (method) {
+      case 'initialize':
+        sendResponse(id, {
+          protocolVersion: '2024-11-05',
+          capabilities: {
+            tools: {}
+          },
+          serverInfo: {
+            name: 'prompt-monitor',
+            version: '1.0.0'
+          }
+        });
+        break;
+        
+      case 'tools/list':
+        sendResponse(id, { tools });
+        break;
+        
+      case 'tools/call':
+        const toolName = params?.name;
+        const args = params?.arguments || {};
+        
+        switch (toolName) {
+          case 'get_prompt_count':
+            if (args.reset) {
+              promptCount = 0;
+              promptHistory = [];
+              sessionStartTime = Date.now();
+              saveState();
+            } else {
+              updateFromLog();
+            }
+            sendResponse(id, {
+              content: [{
+                type: 'text',
+                text: `当前已发送 ${promptCount} 个 prompt`
+              }]
+            });
+            break;
+            
+          case 'get_stats':
+            updateFromLog();
+            const uptime = Math.floor((Date.now() - sessionStartTime) / 1000);
+            sendResponse(id, {
+              content: [{
+                type: 'text',
+                text: JSON.stringify({
+                  promptCount,
+                  uptimeSeconds: uptime,
+                  promptsPerMinute: uptime > 0 ? (promptCount / (uptime / 60)).toFixed(2) : 0,
+                  currentModel
+                }, null, 2)
+              }]
+            });
+            break;
+            
+          case 'get_history':
+            updateFromLog();
+            const limit = args.limit || 10;
+            sendResponse(id, {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(promptHistory.slice(-limit), null, 2)
+              }]
+            });
+            break;
+            
+          default:
+            sendError(id, -32601, `Unknown tool: ${toolName}`);
+        }
+        break;
+        
+      case 'ping':
+        sendResponse(id, {});
+        break;
+        
+      default:
+        sendError(id, -32601, `Method not found: ${method}`);
+    }
+  } catch (err) {
+    sendError(null, -32700, 'Parse error');
+  }
 });

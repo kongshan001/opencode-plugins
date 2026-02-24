@@ -17,10 +17,11 @@
 
 ### 1. 配置 MCP
 
-编辑 `~/.config/opencode/opencode.json`：
+编辑 `~/.config/opencode/opencode.json`（Linux/Mac）或 `%APPDATA%\opencode\opencode.json`（Windows）：
 
 ```json
 {
+  "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "prompt-monitor": {
       "type": "local",
@@ -42,41 +43,23 @@
 | 工具 | 说明 |
 |------|------|
 | `get_prompt_count` | 获取当前 prompt 次数 |
-| `get_prompt_history` | 获取 prompt 历史记录 |
 | `get_stats` | 获取统计信息 |
+| `get_history` | 获取 prompt 历史记录 |
 
 ---
 
-## API
+## 使用方式
 
-### 健康检查
+在 OpenCode 中直接使用：
 
-```bash
-curl http://localhost:3847/health
+```
+使用 prompt-monitor 工具获取 prompt 次数
 ```
 
-### 获取 prompt 次数
+或更具体：
 
-```bash
-curl -X POST http://localhost:3847/tools \
-  -H "Content-Type: application/json" \
-  -d '{"name":"get_prompt_count","arguments":{}}'
 ```
-
-### 获取历史记录
-
-```bash
-curl -X POST http://localhost:3847/tools \
-  -H "Content-Type: application/json" \
-  -d '{"name":"get_prompt_history","arguments":{"limit":10}}'
-```
-
-### 获取统计信息
-
-```bash
-curl -X POST http://localhost:3847/tools \
-  -H "Content-Type: application/json" \
-  -d '{"name":"get_stats","arguments":{}}'
+使用 get_stats 工具查看详细统计
 ```
 
 ---
@@ -89,23 +72,24 @@ curl -X POST http://localhost:3847/tools \
 当前已发送 15 个 prompt
 ```
 
-### get_prompt_history
-
-```json
-[
-  {"count": 1, "step": 0, "model": "glm-5", "timestamp": "2026-02-24T11:00:00.000Z"},
-  {"count": 2, "step": 1, "model": "glm-5", "timestamp": "2026-02-24T11:00:05.000Z"}
-]
-```
-
 ### get_stats
 
 ```json
 {
   "promptCount": 15,
   "uptimeSeconds": 300,
-  "promptsPerMinute": "3.00"
+  "promptsPerMinute": "3.00",
+  "currentModel": "glm-5"
 }
+```
+
+### get_history
+
+```json
+[
+  {"count": 1, "step": 0, "model": "glm-5", "timestamp": "..."},
+  {"count": 2, "step": 1, "model": "glm-5", "timestamp": "..."}
+]
 ```
 
 ---
@@ -114,7 +98,6 @@ curl -X POST http://localhost:3847/tools \
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `PORT` | MCP 服务端口 | 3847 |
 | `OPENCODE_LOG_DIR` | OpenCode 日志目录 | `~/.local/share/opencode/log` |
 | `OPENCODE_STATE_FILE` | 状态文件路径 | `~/.local/state/opencode/prompt-count.json` |
 
@@ -124,7 +107,6 @@ curl -X POST http://localhost:3847/tools \
 
 ```
 opencode-prompt-monitor/
-├── index.js    # MCP 服务器主程序
-├── mcp.json    # 配置示例
+├── index.js    # MCP 服务器（stdio 协议）
 └── README.md   # 本文档
 ```
