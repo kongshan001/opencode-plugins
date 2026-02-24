@@ -1,0 +1,9 @@
+{
+  "name": "opencode-prompt-monitor",
+  "version": "1.0.0",
+  "description": "OpenCode 插件 - 实时监控 prompt 次数",
+  "main": "plugin/index.js",
+  "type": "module",
+  "keywords": ["opencode", "plugin", "prompt", "monitor"],
+  "license": "MIT"
+}
