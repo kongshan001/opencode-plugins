@@ -27,7 +27,23 @@ OpenCode 插件和 MCP 服务器集合。
 
 ## 快速开始
 
-### 部署
+### Windows
+
+```powershell
+# 克隆仓库
+git clone https://github.com/kongshan001/opencode-plugins.git
+cd opencode-plugins
+
+# 运行部署脚本
+.\deploy.ps1
+```
+
+如果遇到执行策略问题，请用管理员运行：
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### macOS / Linux
 
 ```bash
 git clone https://github.com/kongshan001/opencode-plugins.git
@@ -38,11 +54,10 @@ cd opencode-plugins
 ### 手动配置
 
 1. 复制插件：
-```bash
-cp plugins/demo-plugin.js ~/.config/opencode/plugins/
-```
+   - Windows: `copy plugins\demo-plugin.js %USERPROFILE%\.config\opencode\plugins\`
+   - macOS/Linux: `cp plugins/demo-plugin.js ~/.config/opencode/plugins/`
 
-2. 添加 MCP 配置到 `~/.config/opencode/opencode.json`：
+2. 添加 MCP 配置到 `~/.config/opencode/opencode.json`（Windows: `%USERPROFILE%\.config\opencode\opencode.json`）：
 
 ```json
 {
