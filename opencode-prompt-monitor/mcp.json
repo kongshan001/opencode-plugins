@@ -1,7 +1,0 @@
-{
-  "prompt-monitor": {
-    "type": "local",
-    "command": ["node", "/path/to/opencode-plugins/opencode-prompt-monitor/index.js"],
-    "enabled": true
-  }
-}
